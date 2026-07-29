@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// =============================================================
+// Dartmouth Web — Storage Security Rules
+//
+// NOT CURRENTLY IN USE. Firebase Storage now requires a linked billing
+// account (Blaze plan) even for free-tier usage, so images are handled
+// by Cloudinary instead (see public/js/cloudinary-config.js) — no card
+// needed there. Keeping this file around in case the project ever
+// grows enough that Blaze is worth it and you want Firebase Storage's
+// tighter Firestore-adjacent integration back.
+//
+// Two upload areas: article images, and profile avatars.
+// Both cap file size and type at the rules layer — never trust
+// the client-side <input accept> alone, since it's trivial to bypass.
+// =============================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function underSizeLimit() {
+      return request.resource.size < 8 * 1024 * 1024; // 8MB per image
+    }
+
+    // Article images: articles/{articleId}/{fileName}
+    // Anyone can view images in published articles (public site).
+    // Only a signed-in user can upload, and only into an article's own
+    // folder — actual "is this your article" checks happen in Firestore
+    // when the article doc is created/updated; Storage just gates file
+    // type/size and requires auth.
+    match /articles/{articleId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && underSizeLimit();
+      allow delete: if isSignedIn();
+    }
+
+    // Profile avatars: users/{uid}/avatar/{fileName}
+    // Only the account owner can upload their own avatar.
+    match /users/{uid}/avatar/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == uid
+        && isImage() && underSizeLimit();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+  }
+}

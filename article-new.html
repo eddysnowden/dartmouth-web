@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Write — Dartmouth Web</title>
+<link rel="stylesheet" href="css/core.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="index.html" class="brand">DARTMOUTH <span class="dim">/web</span></a>
+    <nav class="navlinks">
+      <a href="index.html">home</a>
+      <a href="article-new.html" class="active" data-when-can-publish style="display:none;">write</a>
+      <a href="admin.html" data-when-admin style="display:none;">admin</a>
+    </nav>
+    <div class="btn-row">
+      <button class="btn" data-open-auth data-when-signed-out>sign in</button>
+      <span data-when-signed-in style="display:none;" class="btn-row">
+        <span class="stamp"><span data-user-name>Account</span></span>
+        <button class="btn btn-ghost" data-signout>sign out</button>
+      </span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="wrap section">
+
+    <div data-when-signed-out>
+      <div class="banner">Sign in to publish an article. Reading is open to everyone — writing needs an account.</div>
+    </div>
+
+    <div data-when-signed-in style="display:none;">
+      <div data-when-revoked style="display:none;">
+        <div class="banner warn">
+          Publishing is currently revoked on this account. You can still read and manage your
+          profile. If you think this was a mistake, you can file an appeal from your profile page.
+        </div>
+      </div>
+
+      <div data-when-can-publish style="display:none;">
+        <h1>Write a new article</h1>
+        <p class="muted" style="max-width:560px;">
+          Text and images only. Any external link goes in References at the bottom — never in
+          the body — and it'll be blocked at submission if it shows up in the text instead.
+        </p>
+
+        <form data-article-form style="margin-top:28px;">
+
+          <label class="field">
+            <span>title</span>
+            <input type="text" name="title" required>
+          </label>
+
+          <label class="field">
+            <span>category</span>
+            <select name="category">
+              <option value="news">News</option>
+              <option value="story">Story</option>
+              <option value="fantasy">Fantasy</option>
+              <option value="anime">Anime</option>
+              <option value="essay">Essay</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+
+          <div class="field">
+            <span>body</span>
+            <div data-blocks></div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button type="button" class="btn" data-add-text>+ text block</button>
+              <button type="button" class="btn" data-add-image>+ image block</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>references <em style="text-transform:none; color:var(--ink-mute);">(the only place a link is allowed)</em></span>
+            <div data-references></div>
+            <button type="button" class="btn" data-add-reference style="margin-top:6px;">+ reference</button>
+          </div>
+
+          <p class="field-error" data-form-error></p>
+          <button type="submit" class="btn btn-solid" data-submit-btn>publish article</button>
+        </form>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span class="muted" style="font-family:var(--mono); font-size:12.5px;">DARTMOUTH WEB</span>
+    <div class="foot-links"><a href="index.html">home</a></div>
+  </div>
+</footer>
+
+<!-- ============ AUTH MODAL (same as index.html) ============ -->
+<div class="modal-backdrop" data-auth-modal>
+  <div class="modal">
+    <div class="win modal-shell">
+      <button class="close-x" data-close-auth aria-label="Close">[ x ]</button>
+      <div class="tabs">
+        <div class="tab active" data-auth-tab="signin">sign in</div>
+        <div class="tab" data-auth-tab="signup">create account</div>
+      </div>
+      <div class="win-body">
+        <div class="authpane active" data-auth-pane="signin">
+          <form data-signin-form>
+            <label class="field"><span>email</span><input type="email" name="email" required></label>
+            <label class="field"><span>password</span><input type="password" name="password" required></label>
+            <p class="field-error" data-form-error></p>
+            <button type="submit" class="btn btn-solid" style="width:100%; justify-content:center;">sign in</button>
+          </form>
+          <div class="or-divider">or</div>
+          <button class="btn btn-google" data-google-signin>Continue with Google</button>
+        </div>
+        <div class="authpane" data-auth-pane="signup">
+          <form data-signup-form>
+            <label class="field"><span>display name</span><input type="text" name="name" required></label>
+            <label class="field"><span>email</span><input type="email" name="email" required></label>
+            <label class="field"><span>password</span><input type="password" name="password" minlength="6" required></label>
+            <p class="field-hint">At least 6 characters.</p>
+            <p class="field-error" data-form-error></p>
+            <button type="submit" class="btn btn-solid" style="width:100%; justify-content:center;">create account</button>
+          </form>
+          <div class="or-divider">or</div>
+          <button class="btn btn-google" data-google-signin>Continue with Google</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/auth.js"></script>
+<script type="module" src="js/ui.js"></script>
+<script type="module">
+  import { newArticleId, uploadArticleImage, createArticle } from "./js/articles.js";
+
+  const blocksEl = document.querySelector('[data-blocks]');
+  const referencesEl = document.querySelector('[data-references]');
+  let blockCount = 0;
+  let refCount = 0;
+
+  function addTextBlock(){
+    const id = `blk-${blockCount++}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'win';
+    wrap.style.marginBottom = '10px';
+    wrap.dataset.blockType = 'text';
+    wrap.id = id;
+    wrap.innerHTML = `
+      <div class="win-bar">
+        <span class="win-title">text block</span>
+        <button type="button" class="btn btn-ghost" data-remove-block style="margin-left:auto; padding:4px 8px;">remove</button>
+      </div>
+      <div class="win-body">
+        <textarea class="serif-input" rows="5" data-block-content placeholder="Write here…"></textarea>
+      </div>`;
+    blocksEl.appendChild(wrap);
+    wrap.querySelector('[data-remove-block]').addEventListener('click', () => wrap.remove());
+  }
+
+  function addImageBlock(){
+    const id = `blk-${blockCount++}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'win';
+    wrap.style.marginBottom = '10px';
+    wrap.dataset.blockType = 'image';
+    wrap.id = id;
+    wrap.innerHTML = `
+      <div class="win-bar">
+        <span class="win-title">image block</span>
+        <button type="button" class="btn btn-ghost" data-remove-block style="margin-left:auto; padding:4px 8px;">remove</button>
+      </div>
+      <div class="win-body">
+        <input type="file" accept="image/*" data-block-file style="margin-bottom:10px;">
+        <input type="text" data-block-caption placeholder="Caption (optional)" style="width:100%; font-family:var(--mono); font-size:13px; color:#fff; background:var(--bg-1); border:1px solid var(--border-lit); border-radius:3px; padding:9px 10px;">
+      </div>`;
+    blocksEl.appendChild(wrap);
+    wrap.querySelector('[data-remove-block]').addEventListener('click', () => wrap.remove());
+  }
+
+  function addReferenceRow(){
+    const id = `ref-${refCount++}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'win';
+    wrap.style.marginBottom = '8px';
+    wrap.id = id;
+    wrap.innerHTML = `
+      <div class="win-body" style="display:flex; gap:8px; padding:12px;">
+        <input type="text" data-ref-label placeholder="Label" style="flex:1; font-family:var(--mono); font-size:13px; color:#fff; background:var(--bg-1); border:1px solid var(--border-lit); border-radius:3px; padding:9px 10px;">
+        <input type="url" data-ref-url placeholder="https://…" style="flex:1.4; font-family:var(--mono); font-size:13px; color:#fff; background:var(--bg-1); border:1px solid var(--border-lit); border-radius:3px; padding:9px 10px;">
+        <button type="button" class="btn btn-ghost" data-remove-ref>remove</button>
+      </div>`;
+    referencesEl.appendChild(wrap);
+    wrap.querySelector('[data-remove-ref]').addEventListener('click', () => wrap.remove());
+  }
+
+  document.querySelector('[data-add-text]').addEventListener('click', addTextBlock);
+  document.querySelector('[data-add-image]').addEventListener('click', addImageBlock);
+  document.querySelector('[data-add-reference]').addEventListener('click', addReferenceRow);
+  addTextBlock(); // start with one, so the form isn't empty
+
+  document.querySelector('[data-article-form]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const errorEl = form.querySelector('[data-form-error]');
+    const submitBtn = form.querySelector('[data-submit-btn]');
+    errorEl.textContent = '';
+
+    const title = form.title.value.trim();
+    const category = form.category.value;
+    if(!title){ errorEl.textContent = 'Title is required.'; return; }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'publishing…';
+
+    try{
+      const articleId = newArticleId();
+
+      // build body blocks, uploading any images first
+      const blockEls = [...blocksEl.children];
+      const body = [];
+      for(const el of blockEls){
+        if(el.dataset.blockType === 'text'){
+          const content = el.querySelector('[data-block-content]').value.trim();
+          if(content) body.push({ type: 'text', content });
+        } else if(el.dataset.blockType === 'image'){
+          const fileInput = el.querySelector('[data-block-file]');
+          const caption = el.querySelector('[data-block-caption]').value.trim();
+          const file = fileInput.files[0];
+          if(file){
+            const url = await uploadArticleImage(articleId, file);
+            body.push({ type: 'image', url, caption });
+          }
+        }
+      }
+
+      if(!body.length){ throw new Error('Add at least one block of content.'); }
+
+      const refEls = [...referencesEl.children];
+      const references = refEls.map(el => ({
+        label: el.querySelector('[data-ref-label]').value.trim(),
+        url: el.querySelector('[data-ref-url]').value.trim()
+      })).filter(r => r.label && r.url);
+
+      await createArticle({ id: articleId, title, category, body, references });
+      window.location.href = `article.html?id=${articleId}`;
+
+    } catch(err){
+      errorEl.textContent = err.message || 'Something went wrong publishing this.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'publish article';
+    }
+  });
+</script>
+</body>
+</html>

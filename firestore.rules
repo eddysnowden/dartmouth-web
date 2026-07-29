@@ -1,0 +1,185 @@
+rules_version = '2';
+
+// =============================================================
+// Dartmouth Web — Firestore Security Rules
+//
+// Read docs/SCHEMA.md first — this file enforces that model.
+//
+// Known limitation, noted honestly rather than glossed over:
+// Firestore rules validate one document write at a time. They can't
+// atomically guarantee "a banLogs entry was created in the same breath
+// as this revocation" the way a database transaction with a CHECK
+// constraint could. The app always writes the users/{uid} update and
+// the banLogs/{logId} entry together in a single batched write, and
+// banLogs is create-only (no edits, no deletes) so history can't be
+// quietly erased after the fact — but a determined attacker with
+// direct API access and a valid admin session could in theory write
+// one without the other. Closing that gap fully means moving
+// revocation through a Cloud Function instead of direct client writes.
+// Worth doing before this handles real user data at scale; not a
+// blocker for getting the core product working first.
+// =============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function myUser() {
+      return userDoc(myUid());
+    }
+
+    function myAdminRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(myUid()))
+        ? myUser().adminRole
+        : null;
+    }
+
+    function isAdminPlus() {
+      return myAdminRole() in ['administrator', 'specialAdministrator', 'generalAdministrator'];
+    }
+
+    function isSpecialAdminPlus() {
+      return myAdminRole() in ['specialAdministrator', 'generalAdministrator'];
+    }
+
+    function isGeneralAdmin() {
+      return myAdminRole() == 'generalAdministrator';
+    }
+
+    function canPublish() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(myUid()))
+        && myUser().publishingRevoked != true;
+    }
+
+    function unchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      // Profiles (display name, bio, socials, badges) are public.
+      allow read: if true;
+
+      // A brand-new account can only ever create itself, and only in the
+      // default, unprivileged state. Nobody signs up as an admin.
+      allow create: if isSignedIn() && myUid() == uid
+        && request.resource.data.role == 'user'
+        && request.resource.data.adminRole == null
+        && request.resource.data.publishingRevoked == false;
+
+      // Case 1: the user editing their own profile fields.
+      // They can never touch their own role, adminRole, publishingRevoked,
+      // or revocation record through this path.
+      allow update: if isSignedIn() && myUid() == uid
+        && unchanged('role')
+        && unchanged('adminRole')
+        && unchanged('publishingRevoked')
+        && unchanged('revocation');
+
+      // Case 2: an Administrator+ changing someone else's role or
+      // publishing status. Certified User can only be granted by Special
+      // Administrator+ (it's a verification mark, not a participation
+      // reward). Nobody can grant themselves or anyone else
+      // specialAdministrator or generalAdministrator through the app —
+      // that only happens by hand in the Firebase console. And an
+      // Administrator can only act on a regular (non-admin) account —
+      // touching a fellow admin's role/adminRole is Special
+      // Administrator+ only, matching "remove Admin roles" being a
+      // Special Administrator power in the schema, not a plain one.
+      allow update: if isAdminPlus() && myUid() != uid
+        && (resource.data.adminRole == null || isSpecialAdminPlus())
+        && request.resource.data.adminRole in [null, 'administrator']
+        && (
+          request.resource.data.role != 'certifiedUser'
+          || isSpecialAdminPlus()
+        )
+        && (
+          request.resource.data.revocation == null
+          || request.resource.data.revocation.permanent != true
+          || isSpecialAdminPlus()
+        );
+
+      // Accounts are never deleted through the app. A revoked person
+      // keeps their account, profile, and reading history — only their
+      // ability to publish changes.
+      allow delete: if false;
+    }
+
+    // ---------- articles ----------
+    match /articles/{articleId} {
+      allow read: if resource.data.status == 'published'
+        || (isSignedIn() && resource.data.authorId == myUid())
+        || isAdminPlus();
+
+      allow create: if canPublish()
+        && request.resource.data.authorId == myUid()
+        && request.resource.data.authorName == myUser().displayName
+        && request.resource.data.status == 'published'
+        && request.resource.data.adminNotes.size() == 0;
+
+      // The author can edit their own article's content while still in
+      // good standing. Admins can always edit (that's the point of the
+      // Administrator "edit articles" power) and are the only ones who
+      // can append adminNotes or change status (soft delete = 'removed').
+      allow update: if (
+          resource.data.authorId == myUid() && canPublish()
+          && unchanged('authorId') && unchanged('status') && unchanged('adminNotes')
+        ) || isAdminPlus();
+
+      // No hard deletes — removal is a status change so history and
+      // admin notes survive. See update rule above.
+      allow delete: if false;
+    }
+
+    // ---------- appeals ----------
+    match /appeals/{appealId} {
+      // Only the person who filed it, or an admin, can read an appeal.
+      allow read: if isSignedIn() && (resource.data.userId == myUid() || isAdminPlus());
+
+      // Only a currently-revoked user can file, and only about themselves.
+      // The app checks for an existing pending appeal before showing the
+      // form; see the note at the top of this file about the limits of
+      // enforcing that fully at the rules layer.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == myUid()
+        && myUser().publishingRevoked == true
+        && request.resource.data.status == 'pending';
+
+      // Only an admin can review (approve/deny) an appeal.
+      allow update: if isAdminPlus()
+        && unchanged('userId') && unchanged('appealText') && unchanged('revocationReason');
+
+      allow delete: if false;
+    }
+
+    // ---------- banLogs (append-only audit trail) ----------
+    match /banLogs/{logId} {
+      allow read: if isAdminPlus();
+      allow create: if isAdminPlus() && request.resource.data.performedBy == myUid();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ---------- events ----------
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isSpecialAdminPlus() && request.resource.data.createdBy == myUid();
+      allow update: if isSpecialAdminPlus();
+      allow delete: if isSpecialAdminPlus();
+    }
+  }
+}
