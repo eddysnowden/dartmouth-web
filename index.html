@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Article — Dartmouth Web</title>
+<title>Dartmouth Web — publish anything true</title>
+<meta name="description" content="Dartmouth Web is an open publishing platform — sign in and write, or read as a guest.">
 <link rel="stylesheet" href="core.css">
 </head>
 <body>
@@ -12,7 +13,7 @@
   <div class="topbar-inner">
     <a href="index.html" class="brand">DARTMOUTH <span class="dim">/web</span></a>
     <nav class="navlinks">
-      <a href="index.html">home</a>
+      <a href="index.html" class="active">home</a>
       <a href="article-new.html" data-when-can-publish style="display:none;">write</a>
       <a href="admin.html" data-when-admin style="display:none;">admin</a>
     </nav>
@@ -27,9 +28,22 @@
 </header>
 
 <main>
-  <section class="wrap section" style="max-width:720px;">
-    <div data-article-root>
-      <p class="muted">Loading…</p>
+  <section class="wrap section" style="padding-bottom:20px;">
+    <p class="stamp"><b>status</b> open · publish with an account</p>
+    <h1 style="margin-top:14px;">Write what's true. Publish it worldwide.</h1>
+    <p class="muted" style="max-width:600px; font-size:15.5px;">
+      News, fiction, essays, anime write-ups — anything, as long as it's true where it claims
+      to be true, and follows the house rules. Text and images only; external links belong in
+      the References section, not the middle of the page.
+    </p>
+  </section>
+
+  <section class="wrap section" style="padding-top:0;">
+    <div class="section-head" style="display:flex; justify-content:space-between; align-items:baseline;">
+      <h2 style="margin:0;">Recent articles</h2>
+    </div>
+    <div class="card-grid" data-article-feed>
+      <div class="article-card"><p class="muted">Loading…</p></div>
     </div>
   </section>
 </main>
@@ -37,7 +51,10 @@
 <footer>
   <div class="wrap foot-inner">
     <span class="muted" style="font-family:var(--mono); font-size:12.5px;">DARTMOUTH WEB</span>
-    <div class="foot-links"><a href="index.html">home</a></div>
+    <div class="foot-links">
+      <a href="index.html">home</a>
+      <a href="article-new.html">write</a>
+    </div>
   </div>
 </footer>
 
@@ -51,6 +68,7 @@
         <div class="tab" data-auth-tab="signup">create account</div>
       </div>
       <div class="win-body">
+
         <div class="authpane active" data-auth-pane="signin">
           <form data-signin-form>
             <label class="field"><span>email</span><input type="email" name="email" required></label>
@@ -61,6 +79,7 @@
           <div class="or-divider">or</div>
           <button class="btn btn-google" data-google-signin>Continue with Google</button>
         </div>
+
         <div class="authpane" data-auth-pane="signup">
           <form data-signup-form>
             <label class="field"><span>display name</span><input type="text" name="name" required></label>
@@ -73,6 +92,7 @@
           <div class="or-divider">or</div>
           <button class="btn btn-google" data-google-signin>Continue with Google</button>
         </div>
+
       </div>
     </div>
   </div>
@@ -81,57 +101,33 @@
 <script type="module" src="auth.js"></script>
 <script type="module" src="ui.js"></script>
 <script type="module">
-  import { fetchArticle } from "./articles.js";
+  import { fetchRecentArticles } from "./articles.js";
 
-  function escapeHtml(s){
-    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function excerptOf(article){
+    const firstText = article.body.find(b => b.type === 'text');
+    return firstText ? firstText.content.slice(0, 140) + '…' : '';
   }
 
-  function renderBlock(b){
-    if(b.type === 'text'){
-      return `<p>${escapeHtml(b.content).replace(/\n\n+/g,'</p><p>')}</p>`;
+  function renderFeed(articles){
+    const feed = document.querySelector('[data-article-feed]');
+    if(!articles.length){
+      feed.innerHTML = '<div class="article-card"><p class="muted">Nothing published yet — be the first.</p></div>';
+      return;
     }
-    if(b.type === 'image'){
-      return `<figure><img src="${b.url}" alt="${escapeHtml(b.caption||'')}">${b.caption ? `<figcaption>${escapeHtml(b.caption)}</figcaption>` : ''}</figure>`;
-    }
-    return '';
+    feed.innerHTML = articles.map(a => `
+      <article class="article-card">
+        <span class="stamp"><b>${a.category || 'general'}</b> · ${a.authorName}</span>
+        <h3><a href="article.html?id=${a.id}">${a.title}</a></h3>
+        <p class="excerpt">${excerptOf(a)}</p>
+      </article>
+    `).join('');
   }
 
-  function renderReferences(refs){
-    if(!refs || !refs.length) return '';
-    return `
-      <div class="hr-dash" style="border-top:1px dashed var(--border); margin:40px 0 24px;"></div>
-      <h3 style="font-family:var(--mono); color:var(--green);">References</h3>
-      <ul style="font-family:var(--mono); font-size:13.5px; padding-left:20px;">
-        ${refs.map(r => `<li><a href="${r.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.label)}</a></li>`).join('')}
-      </ul>`;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get('id');
-  const root = document.querySelector('[data-article-root]');
-
-  if(!id){
-    root.innerHTML = '<p class="muted">No article specified.</p>';
-  } else {
-    fetchArticle(id).then(article => {
-      if(!article){
-        root.innerHTML = '<p class="muted">This article doesn\'t exist, or was removed.</p>';
-        return;
-      }
-      root.innerHTML = `
-        <span class="stamp"><b>${article.category || 'general'}</b> · by ${escapeHtml(article.authorName)}</span>
-        <h1 style="margin-top:16px;">${escapeHtml(article.title)}</h1>
-        <div class="reading">
-          ${article.body.map(renderBlock).join('')}
-          ${renderReferences(article.references)}
-        </div>
-      `;
-    }).catch(err => {
-      root.innerHTML = '<p class="muted">Couldn\'t load this article.</p>';
-      console.error(err);
-    });
-  }
+  fetchRecentArticles().then(renderFeed).catch(err => {
+    document.querySelector('[data-article-feed]').innerHTML =
+      `<div class="article-card"><p class="muted">Couldn't load articles yet — check your Firebase config is filled in.</p></div>`;
+    console.error(err);
+  });
 </script>
 </body>
 </html>
