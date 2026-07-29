@@ -16,11 +16,11 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID"
+  apiKey: "AIzaSyC6NMsudgvJVx11h9RTz5tvN28pmEDjQrI",
+  authDomain: "dartmouth-web.firebaseapp.com",
+  projectId: "dartmouth-web"",
+  messagingSenderId: "306120421851",
+  appId: "1:306120421851:web:98166667fdbdaba37cb7fe"
 };
 
 export const app = initializeApp(firebaseConfig);
