@@ -20,8 +20,8 @@
 // bandwidth OR 1,000 transformations, in any mix. Free forever, no
 // card on file. Plenty of headroom for a small-to-medium site.
 
-export const CLOUDINARY_CLOUD_NAME = "REPLACE_WITH_YOUR_CLOUD_NAME";
-export const CLOUDINARY_UPLOAD_PRESET = "REPLACE_WITH_YOUR_UNSIGNED_PRESET_NAME";
+export const CLOUDINARY_CLOUD_NAME = "v4n1smr4";
+export const CLOUDINARY_UPLOAD_PRESET = "dartmouth_unsigned";
 
 export async function uploadImageToCloudinary(file){
   const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
